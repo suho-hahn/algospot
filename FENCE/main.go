@@ -12,18 +12,12 @@ type MyScanner struct {
     in *bufio.Scanner
 }
 
-var in = MyScanner{bufio.NewScanner(os.Stdin)}
-
 func (m *MyScanner) NextInt() (int, error) {
-    if !m.innerNext(ScanIntSplitter) {
+    if !m.in.Scan() {
         return 0, m.in.Err()
     }
     r, _ := strconv.Atoi(m.in.Text())
     return r, nil
-}
-
-func (m *MyScanner) innerNext(f bufio.SplitFunc) bool {
-    return m.in.Scan()
 }
 
 func ScanIntSplitter(data []byte, atEOF bool) (advance int, token []byte, err error) {
@@ -70,6 +64,8 @@ func init() {
 
 func main() {
 
+    // Scanner 초기화
+    in := MyScanner{bufio.NewScanner(os.Stdin)}
     in.in.Split(ScanIntSplitter)
     // go 1.2.1에는 없나보다...ㅠ
     //in.in.Buffer(make([]byte, 1<<20), 1<<20)
