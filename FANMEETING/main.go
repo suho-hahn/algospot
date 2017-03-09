@@ -5,12 +5,22 @@ package main
 import (
     "fmt"
     "math"
+    "bufio"
+    "os"
+    "strconv"
+    "log"
+    "bytes"
+)
+
+const (
+    MAX_LEN = 200000
 )
 
 var complexSliceListA = make([][]complex128, 20)
 var complexSliceListB = make([][]complex128, 20)
 
 func init() {
+    log.SetFlags(log.LstdFlags | log.Lshortfile)
     for i := range complexSliceListA {
         complexSliceListA[i] = make([]complex128, 1<<uint(i))
         complexSliceListB[i] = make([]complex128, 1<<uint(i))
@@ -19,36 +29,90 @@ func init() {
 
 func main() {
 
-    var caseNum int = 0
-    fmt.Scanln(&caseNum)
+    //var caseNum int = 0
+    //fmt.Scanln(&caseNum)
+    scanner := bufio.NewScanner(os.Stdin)
+    scanner.Split(bufio.ScanBytes)
 
+    var caseNum int
+    scanBuffer := make([]byte, 0, 1024*512)
+    for {
+        if ! scanner.Scan() {
+            panic(scanner.Err())
+        }
+        data := scanner.Bytes()
+        if i := bytes.IndexByte(data, '\n'); i >= 0 {
+            caseNum, _ = strconv.Atoi(string(append(scanBuffer, data[:i]...)))
+            scanBuffer = append(scanBuffer[:0], data[i+1:]...)
+            break
+        } else {
+            scanBuffer = append(scanBuffer, data...)
+        }
+
+    }
+
+    members, fans := make([]int, 0, MAX_LEN), make([]int, 0, MAX_LEN)
     for i:=0; i<caseNum; i++{
 
-        var members, fans []int
+        members = members[:0]
+        fans = fans[:0]
+
         for {
-            var b byte
-            fmt.Scanf("%c", &b)
-            //fmt.Println(b)
-            if b == 'M' {
-                members = append(members, 1)
-            } else if b == 'F' {
-                members = append(members, 0)
-            } else{
-                break
+            if ! scanner.Scan() {
+                panic(scanner.Err())
             }
+
+            data := scanner.Bytes()
+            scanBuffer = append(scanBuffer, data...)
+            newLineIndex := -1
+
+            for bufIdx, b := range scanBuffer {
+                if b == 'M' {
+                    members = append(members, 1)
+                } else if b == 'F' {
+                    members = append(members, 0)
+                } else {
+                    newLineIndex = bufIdx
+                    break
+                }
+            }
+
+            if newLineIndex >= 0 {
+                scanBuffer = append(scanBuffer[:0], scanBuffer[newLineIndex + 1:]...)
+                break
+            } else {
+                scanBuffer = scanBuffer[:0]
+            }
+
         }
 
         for {
-            var b byte
-            fmt.Scanf("%c", &b)
-            //fmt.Println(b)
-            if b == 'M' {
-                fans = append(fans, 1)
-            } else if b == 'F' {
-                fans = append(fans, 0)
-            } else{
-                break
+            if ! scanner.Scan() {
+                panic(scanner.Err())
             }
+
+            data := scanner.Bytes()
+            scanBuffer = append(scanBuffer, data...)
+            newLineIndex := -1
+
+            for bufIdx, b := range scanBuffer {
+                if b == 'M' {
+                    fans = append(fans, 1)
+                } else if b == 'F' {
+                    fans = append(fans, 0)
+                } else {
+                    newLineIndex = bufIdx
+                    break
+                }
+            }
+
+            if newLineIndex >= 0 {
+                scanBuffer = append(scanBuffer[:0], scanBuffer[newLineIndex + 1:]...)
+                break
+            } else {
+                scanBuffer = scanBuffer[:0]
+            }
+
         }
 
         for j:=0; j<len(fans) / 2; j++ {
