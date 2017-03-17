@@ -7,10 +7,9 @@ import (
     "strconv"
     "strings"
     "bytes"
-    "fmt"
     "math"
-    //"flag"
     //"runtime/pprof"
+    //"flag"
 )
 
 type Seq struct {
@@ -23,16 +22,18 @@ func init() {
     log.SetFlags(log.LstdFlags | log.Llongfile)
 }
 
-//var memprofile = flag.String("memprofile", "", "write memory profile to this file")
-//var profIdx = 0
+var stdoutWriter *bufio.Writer
 
 func main() {
-    //flag.Parse()
+
     /*
     max cases: 50
     max strings per case: [1, 15]
     max length of string: [1, 40]
      */
+
+    stdoutWriter = bufio.NewWriter(os.Stdout)
+    defer stdoutWriter.Flush()
 
     scanner := bufio.NewScanner(os.Stdin)
     scanner.Split(bufio.ScanLines)
@@ -52,6 +53,7 @@ func main() {
         solve(strList)
 
     }
+
 
 }
 
@@ -117,8 +119,7 @@ func solve(strList []string) {
     //}
 
     seq := joinStr.seqMap[len(joinStr.seqMap) - 1]
-    resultString := make([]byte, 0, seq.Length)
-    resultString = append(resultString, []byte(strList[seq.Prefix]) ...)
+    stdoutWriter.Write([]byte(strList[seq.Prefix]))
 
     exPrefix := seq.Prefix
     seq = seq.Next
@@ -127,30 +128,13 @@ func solve(strList []string) {
         curPrefix := seq.Prefix
         overlapLen := joinStr.overlap[exPrefix][curPrefix]
 
-        resultString = append(
-            resultString[:len(resultString) - overlapLen],
-            []byte(strList[curPrefix])...)
+        stdoutWriter.Write([]byte(strList[curPrefix])[overlapLen:])
 
         exPrefix = curPrefix
         seq = seq.Next
     }
 
-    fmt.Println(string(resultString))
-
-    //if *memprofile != "" {
-    //
-    //    profIdx ++
-    //    f, err := os.Create(fmt.Sprint(*memprofile, "_", profIdx))
-    //
-    //    if err != nil {
-    //        log.Fatal(err)
-    //    }
-    //
-    //    pprof.WriteHeapProfile(f)
-    //    f.Close()
-    //    return
-    //}
-
+    stdoutWriter.WriteByte('\n')
 
 }
 
@@ -184,32 +168,83 @@ func (join *JoinStr) FillMapAt(mapKey int) {
         overlapLen := join.overlap[prefixStrIndex][suffixStrIndex]
         concatLen := prefixLen + suffixLen - overlapLen
 
-        if concatLen < resultLength {
-            resultLength = concatLen
-        } else if concatLen >= resultLength {
+        if concatLen > resultLength {
             continue
         }
 
+        var newSeq *Seq
         if overlapLen == prefixLen {
-            resultSeq = suffixSeq
+            newSeq = suffixSeq
         } else if overlapLen == suffixLen {
-            newSeq := &Seq{
+            newSeq = &Seq{
                 Prefix: prefixStrIndex,
                 Next: suffixSeq.Next,
                 Length: concatLen,
             }
-            resultSeq = newSeq
         } else {
-            newSeq := &Seq{
+            newSeq = &Seq{
                 Prefix: prefixStrIndex,
                 Next: suffixSeq,
                 Length: concatLen,
             }
+        }
+
+
+        if concatLen < resultLength {
+            resultLength = concatLen
+            resultSeq = newSeq
+        } else if join.CompareSeq(newSeq, resultSeq) == -1 { // ==
             resultSeq = newSeq
         }
+
     }
 
     join.seqMap[mapKey] = resultSeq
+
+}
+
+func (join *JoinStr) CompareSeq(seqA, seqB *Seq) int {
+
+    strA := join.strList[seqA.Prefix]
+    strB := join.strList[seqB.Prefix]
+
+    for {
+
+        minLen := min(len(strA), len(strB))
+
+        cmp := bytes.Compare([]byte(strA)[:minLen], []byte(strB)[:minLen])
+        if cmp != 0 {
+            return cmp
+        }
+
+        if len(strA) == len(strB) {
+            seqA = seqA.Next
+            seqB = seqB.Next
+
+            if seqA == nil && seqB == nil {
+                return 0
+            } else if seqA == nil {
+                return -1
+            } else {
+                return 1
+            }
+
+        } else if len(strA) < len(strB) {
+            seqA = seqA.Next
+            if seqA == nil {
+                return -1
+            }
+            strA = join.strList[seqA.Prefix]
+        } else {
+            seqB = seqB.Next
+            if seqB == nil {
+                return 1
+            }
+            strB = join.strList[seqB.Prefix]
+        }
+
+    }
+
 
 }
 
