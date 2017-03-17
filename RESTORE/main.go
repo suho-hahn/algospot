@@ -5,18 +5,29 @@ import (
     "bufio"
     "os"
     "strconv"
-    "math"
     "strings"
-    "fmt"
     "bytes"
+    "fmt"
+    "math"
+    //"flag"
+    //"runtime/pprof"
 )
+
+type Seq struct {
+    Prefix    int
+    Next      *Seq
+    Length    int
+}
 
 func init() {
     log.SetFlags(log.LstdFlags | log.Llongfile)
 }
 
-func main() {
+//var memprofile = flag.String("memprofile", "", "write memory profile to this file")
+//var profIdx = 0
 
+func main() {
+    //flag.Parse()
     /*
     max cases: 50
     max strings per case: [1, 15]
@@ -31,11 +42,11 @@ func main() {
     for ; caseNum > 0; caseNum -- {
 
         strNum := scanLineAsInt(scanner)
-        strList := make([]string, 1 << uint(strNum))
+        strList := make([]string, strNum)
 
         for i:=0; i<strNum; i++ {
             str := scanLineAsString(scanner)
-            strList[1 << uint(i)] = str
+            strList[i] = str
         }
 
         solve(strList)
@@ -44,85 +55,176 @@ func main() {
 
 }
 
+type JoinStr struct {
+
+    strList []string
+    seqMap  []*Seq
+    overlap [][]int
+
+}
+
+
+
 func solve(strList []string) {
 
     //log.Println("---------------------")
-    fmt.Println(getStringAt(strList, len(strList) - 1))
+
+    // overlap[left][right] = overlapping length
+    joinStr := JoinStr{
+        strList: strList,
+        //skipList: make([]bool, len(strList)),
+        seqMap: make([]*Seq, 1<<uint(len(strList))), // seqList[조합 bitmap][seq 조합 개수만큼]
+        overlap: make([][]int, len(strList)),
+    }
+
+
+    for i := 0; i<len(strList); i++ {
+
+        joinStr.overlap[i] = make([]int, len(strList))
+        for j := 0; j<len(strList); j++ {
+            if i == j {
+                continue
+            }
+            joinStr.overlap[i][j] = calcOverlap(strList[i], strList[j])
+        }
+
+        joinStr.seqMap[1<<uint(i)] = &Seq{
+            Prefix: i,
+            Next: nil,
+            Length: len(strList[i]),
+        }
+
+    }
+
+    //log.Println(joinStr.seqListMap)
+
+
+    for i:=1; i<len(joinStr.seqMap); i++ {
+        joinStr.FillMapAt(i)
+    }
+
+    //for i, seqList := range joinStr.seqListMap {
+    //    log.Println("bitmask", i)
+    //    for j, seq := range seqList {
+    //        result := fmt.Sprint(" result", j, ":")
+    //        for seq != nil {
+    //            result = fmt.Sprintf("%s %d(%p)", result, seq.Prefix, seq)
+    //            seq = seq.Next
+    //        }
+    //        log.Println(result)
+    //
+    //    }
+    //}
+
+    seq := joinStr.seqMap[len(joinStr.seqMap) - 1]
+    resultString := make([]byte, 0, seq.Length)
+    resultString = append(resultString, []byte(strList[seq.Prefix]) ...)
+
+    exPrefix := seq.Prefix
+    seq = seq.Next
+    for seq != nil {
+
+        curPrefix := seq.Prefix
+        overlapLen := joinStr.overlap[exPrefix][curPrefix]
+
+        resultString = append(
+            resultString[:len(resultString) - overlapLen],
+            []byte(strList[curPrefix])...)
+
+        exPrefix = curPrefix
+        seq = seq.Next
+    }
+
+    fmt.Println(string(resultString))
+
+    //if *memprofile != "" {
+    //
+    //    profIdx ++
+    //    f, err := os.Create(fmt.Sprint(*memprofile, "_", profIdx))
+    //
+    //    if err != nil {
+    //        log.Fatal(err)
+    //    }
+    //
+    //    pprof.WriteHeapProfile(f)
+    //    f.Close()
+    //    return
+    //}
+
 
 }
 
-func getStringAt(strList []string, index int) string {
-    if len(strList[index]) > 0 {
-        return strList[index]
+func (join *JoinStr) FillMapAt(mapKey int) {
+
+    if join.seqMap[mapKey] != nil {
+        return
     }
 
-    //log.Println("index:", index)
+    //log.Println("mapKey:", mapKey)
 
-    result := ""
-    minLength := math.MaxInt32
-    for i:= 1; i<index ; i *= 2 {
+    var resultSeq *Seq
+    resultLength := math.MaxInt32
 
-        if index & i == 0 {
-            continue
-        }
-        j := index - i
+    for prefixStrIndex, prefixBitmask := 0, 1 ;
+        prefixBitmask < mapKey ;
+        prefixStrIndex, prefixBitmask = prefixStrIndex + 1, prefixBitmask * 2 {
 
-        a := getStringAt(strList, i)
-        b := getStringAt(strList, j)
+        //log.Println("try", i)
 
-        joinResult, ok := join(a, b, minLength)
-
-        if ! ok {
+        if mapKey & prefixBitmask == 0 {
             continue
         }
 
-        //log.Println(index, i, j, joinResult)
-        if len(joinResult) < minLength {
-            result = joinResult
-            minLength = len(result)
+        suffixSeqIndex := mapKey - prefixBitmask
+        suffixSeq := join.seqMap[suffixSeqIndex]
+        suffixStrIndex := suffixSeq.Prefix
+
+        prefixLen := len(join.strList[prefixStrIndex])
+        suffixLen := suffixSeq.Length
+        overlapLen := join.overlap[prefixStrIndex][suffixStrIndex]
+        concatLen := prefixLen + suffixLen - overlapLen
+
+        if concatLen < resultLength {
+            resultLength = concatLen
+        } else if concatLen >= resultLength {
+            continue
         }
 
+        if overlapLen == prefixLen {
+            resultSeq = suffixSeq
+        } else if overlapLen == suffixLen {
+            newSeq := &Seq{
+                Prefix: prefixStrIndex,
+                Next: suffixSeq.Next,
+                Length: concatLen,
+            }
+            resultSeq = newSeq
+        } else {
+            newSeq := &Seq{
+                Prefix: prefixStrIndex,
+                Next: suffixSeq,
+                Length: concatLen,
+            }
+            resultSeq = newSeq
+        }
     }
 
-    strList[index] = result
-
-    //log.Println(index, ":", result)
-
-    return result
+    join.seqMap[mapKey] = resultSeq
 
 }
 
-func join(a, b string, maxLen int) (string, bool) {
+func calcOverlap(a, b string) int { // overlap len
 
-    if strings.Index(b, a) != -1 {
-        return b, true
-    } else if strings.Index(a, b) != -1 {
-        return a, true
+    if strings.Index(b, a) != -1 || strings.Index(b, a) != -1  {
+        return min(len(a), len(b))
     }
 
-    lenSum := len(a) + len(b)
-
-    // always len(a) > len(b)
-    for i:= min(len(a), len(b)) - 1; i >= 0; i-- {
-
-        if lenSum - i > maxLen {
-            return "", false
-        }
-
-        // concat AB
+    for i := min(len(a), len(b)) - 1; i >= 1; i-- {
         if bytes.Equal([]byte(a[len(a) - i:]), []byte(b[:i])) {
-            concatAB := string(append([]byte(a), b[i:]...))
-            return concatAB, true
+            return i
         }
-        // concat BA
-        //if bytes.Equal([]byte(b[len(b) - i:]), []byte(a[:i])) {
-        //    concatBA := string(append([]byte(b), a[i:]...))
-        //    return concatBA, true
-        //}
     }
-
-    return "", false
-
+    return 0
 }
 
 func scanLineAsString(scanner *bufio.Scanner) string {
