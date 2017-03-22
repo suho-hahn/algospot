@@ -287,8 +287,8 @@ func (board *Board)CalcSlotCandidate() {
             hHint.Used = hHint.Used.Or(bitmap16Mask[slot.Value])
         }
 
-        //OptimizeHint(vHint)
-        //OptimizeHint(hHint)
+        //vHint.CombiList = OptimizeHint(vHint)
+        //hHint.CombiList = OptimizeHint(hHint)
 
         slots = append(slots, vHint.Slots...)
         slots = append(slots, hHint.Slots...)
@@ -369,33 +369,30 @@ func (hint *Hint) IsValid() int8 {
 
 }
 
-func OptimizeHint(hint *Hint) bool {
+func OptimizeHint(hint *Hint) []Bitmap16{
 
-    allCandMap := Bitmap16(0)
+    candidateBitmap := Bitmap16(0)
     for _, slot := range hint.Slots {
         if slot.CandidateBitmap == 0 {
-            return false
+            return hint.CombiList
         }
-        allCandMap = allCandMap.Or(slot.CandidateBitmap)
+        candidateBitmap = candidateBitmap.Or(slot.CandidateBitmap)
     }
 
-    hintCombiChanged := false
+    newCombiList := make([]Bitmap16, 0, len(hint.CombiList))
     for i:=0; i<len(hint.CombiList); i++ {
 
         combi := hint.CombiList[i]
 
-        if combi.And(allCandMap) == 0 {
-
-            //log.Println("unused value")
-            hint.CombiList = append(hint.CombiList[:i], hint.CombiList[i+1:]...)
-            i --
-            hintCombiChanged = true
+        if combi.And(candidateBitmap) == 0 {
+            continue
         }
+        newCombiList = append(newCombiList, combi)
 
     }
 
     //log.Println(hint.CombiList)
-    return hintCombiChanged
+    return newCombiList
 
 }
 
