@@ -6,6 +6,7 @@ import (
     "log"
     "strconv"
     "fmt"
+    //"sort"
 )
 
 const (
@@ -42,6 +43,8 @@ type Slot struct {
 
 }
 
+type SortedSlotsByCandidates []*Slot
+
 type Hint struct {
 
     Row        int
@@ -69,6 +72,7 @@ var bitmap16Mask = []Bitmap16{
     1<<8, 1<<9, 1<<10, 1<<11,
     1<<12, 1<<13, 1<<14, 1<<15,
 }
+var bitCountCache = make([]int, 1024)
 var factorial = []int{
     0,
     1,
@@ -95,6 +99,11 @@ func init() {
     for i:=1; i<=9; i++ {
         combiCache[0][i] = []Bitmap16{}
         combiCache[i][1] = []Bitmap16{ 1<<uint(i) }
+    }
+
+    for i:=0; i<len(bitCountCache); i++ {
+        bitCountCache[i] = len(Bitmap16(i).GetEnabledIndexes())
+        //log.Println(i, bitCountCache[i])
     }
 
     factorial[1] = 1
@@ -205,6 +214,7 @@ func (board *Board) Solve() {
     }
 
     //log.Println("--------------")
+    //sort.Sort(SortedSlotsByCandidates(remainedSlots))
     board.FillSlots(remainedSlots)
 
     //board.LogSlots()
@@ -278,11 +288,10 @@ func (board *Board)CalcSlotCandidate() {
         }
 
         slot.CandidateBitmap = newCandidateBitmap
-        candidates := slot.CandidateBitmap.GetEnabledIndexes()
-        //valueFixed := false
-        if len(candidates) == 1 {
-            slot.Value = candidates[0]
-            //valueFixed = true
+        valueFixed := false
+        if bitCountCache[slot.CandidateBitmap] == 1 {
+            slot.Value = slot.CandidateBitmap.GetEnabledIndexes()[0]
+            valueFixed = true
             vHint.Used = vHint.Used.Or(bitmap16Mask[slot.Value])
             hHint.Used = hHint.Used.Or(bitmap16Mask[slot.Value])
         }
@@ -290,16 +299,16 @@ func (board *Board)CalcSlotCandidate() {
         //vHint.CombiList = OptimizeHint(vHint)
         //hHint.CombiList = OptimizeHint(hHint)
 
-        slots = append(slots, vHint.Slots...)
-        slots = append(slots, hHint.Slots...)
+        //slots = append(slots, vHint.Slots...)
+        //slots = append(slots, hHint.Slots...)
 
-        //if OptimizeHint(vHint, slot) || valueFixed {
-        //    slots = append(slots, vHint.Slots...)
-        //}
+        if OptimizeHint(vHint, slot) || valueFixed {
+            slots = append(slots, vHint.Slots...)
+        }
 
-        //if OptimizeHint(hHint, slot) || valueFixed {
-        //    slots = append(slots, hHint.Slots...)
-        //}
+        if OptimizeHint(hHint, slot) || valueFixed {
+            slots = append(slots, hHint.Slots...)
+        }
 
     }
 
@@ -337,6 +346,9 @@ func (board *Board) FillSlots(slots []*Slot) bool {
             board.FillSlots(slots[1:]) {
             return true
         }
+
+
+
         slot.Value = 0
         vHint.Used = vHint.Used.DisableAt(cand)
         hHint.Used = hHint.Used.DisableAt(cand)
@@ -369,32 +381,29 @@ func (hint *Hint) IsValid() int8 {
 
 }
 
-func OptimizeHint(hint *Hint) []Bitmap16{
+func OptimizeHint(hint *Hint, slot *Slot) bool {
 
-    candidateBitmap := Bitmap16(0)
-    for _, slot := range hint.Slots {
-        if slot.CandidateBitmap == 0 {
-            return hint.CombiList
-        }
-        candidateBitmap = candidateBitmap.Or(slot.CandidateBitmap)
-    }
-
+    combiListChanged := false
     newCombiList := make([]Bitmap16, 0, len(hint.CombiList))
+
     for i:=0; i<len(hint.CombiList); i++ {
 
         combi := hint.CombiList[i]
 
-        if combi.And(candidateBitmap) == 0 {
-            continue
+        if combi.And(slot.CandidateBitmap) == 0 {
+            combiListChanged = true
+        } else {
+            newCombiList = append(newCombiList, combi)
         }
-        newCombiList = append(newCombiList, combi)
 
     }
 
-    //log.Println(hint.CombiList)
-    return newCombiList
+    hint.CombiList = newCombiList
+
+    return combiListChanged
 
 }
+/*
 
 func OptimizeHint2(hint *Hint) bool {
 
@@ -425,6 +434,7 @@ func OptimizeHint2(hint *Hint) bool {
     return hintCombiChanged
 
 }
+*/
 
 func ReduceCandidate(hint *Hint, slot *Slot, newBitmap Bitmap16) Bitmap16 {
 
@@ -450,6 +460,12 @@ func ReduceCandidate(hint *Hint, slot *Slot, newBitmap Bitmap16) Bitmap16 {
 
 }
 
+func (a SortedSlotsByCandidates) Len() int           { return len(a) }
+func (a SortedSlotsByCandidates) Swap(i, j int)      { a[i], a[j] = a[j], a[i] }
+func (a SortedSlotsByCandidates) Less(i, j int) bool {
+    return  bitCountCache[a[i].CandidateBitmap] <
+            bitCountCache[a[j].CandidateBitmap]
+}
 
 func (bitmap Bitmap16) IsEnabledAt(index int) bool {
     return bitmap & bitmap16Mask[index] > 0
